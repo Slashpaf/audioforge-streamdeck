@@ -32,6 +32,9 @@ class AudioForgeClient {
   private _connected = false;
   private started = false;
 
+  private pending = new Map<string, { resolve: (m: WsMessage) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  private requestSeq = 0;
+
   private _savedStates: SavedStateInfo[] = [];
   private stateListeners: StateListener[] = [];
   private catalogListeners: CatalogListener[] = [];
@@ -122,6 +125,37 @@ class AudioForgeClient {
   }
 
   /**
+   * Send a command and resolve with Audio Forge's result message (which carries extra fields for some
+   * commands, such as durationMs for playEcho). Rejects when offline, on an error result, or on timeout.
+   */
+  request(cmd: CommandPayload, timeoutMs = 12_000): Promise<WsMessage> {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      this.tryLaunchAudioForge();
+      return Promise.reject(new Error("Audio Forge is not connected"));
+    }
+    const requestId = `sd-${++this.requestSeq}`;
+    return new Promise<WsMessage>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(requestId);
+        reject(new Error(`No answer to "${cmd.command}" in time`));
+      }, timeoutMs);
+      // Do not keep the plugin process alive for a pending request.
+      timer.unref();
+      this.pending.set(requestId, { resolve, reject, timer });
+      ws.send(JSON.stringify({ ...cmd, requestId }));
+    });
+  }
+
+  private rejectPending(error: Error) {
+    for (const p of this.pending.values()) {
+      clearTimeout(p.timer);
+      p.reject(error);
+    }
+    this.pending.clear();
+  }
+
+  /**
    * Call this at the top of every physical key/dial handler so that pressing
    * any button while offline triggers the AudioForge launch, even for actions
    * that would otherwise return early (e.g. not yet configured).
@@ -175,6 +209,7 @@ class AudioForgeClient {
     this.ws.on("close", () => {
       streamDeck.logger.info("Disconnected from AudioForge");
       this._connected = false;
+      this.rejectPending(new Error("Audio Forge connection closed"));
       this.notify(this.connectionListeners, false);
       this.scheduleReconnect();
     });
@@ -185,6 +220,7 @@ class AudioForgeClient {
   }
 
   private disconnect() {
+    this.rejectPending(new Error("Audio Forge connection closed"));
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -210,6 +246,7 @@ class AudioForgeClient {
    */
   shutdown() {
     this.started = false;
+    this.rejectPending(new Error("Audio Forge client shut down"));
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -329,9 +366,16 @@ class AudioForgeClient {
         this._savedStates = (msg as unknown as SavedStatesList).savedStates ?? [];
         this.notify(this.savedStatesListeners, this._savedStates);
         break;
-      case "result":
-        // Results are fire-and-forget for now
+      case "result": {
+        const requestId = typeof msg.requestId === "string" ? msg.requestId : null;
+        const p = requestId ? this.pending.get(requestId) : undefined;
+        if (!p || !requestId) break; // Results of plain send() calls are not tracked.
+        this.pending.delete(requestId);
+        clearTimeout(p.timer);
+        if (msg.ok === false) p.reject(new Error(String(msg.error ?? "Audio Forge command failed")));
+        else p.resolve(msg);
         break;
+      }
       case "echo":
         // Could flash an echo button
         break;

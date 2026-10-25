@@ -9,7 +9,12 @@ import streamDeck, {
 } from "@elgato/streamdeck";
 import type { JsonValue } from "@elgato/utils";
 import { audioForge } from "../audioforge-client";
+import { makeActiveImage } from "../image-utils";
 import type { EchoSettings } from "../types";
+
+/** The key stays amber for the echo's length, within these bounds. */
+const MIN_FLASH_MS = 350;
+const MAX_FLASH_MS = 30_000;
 
 @action({ UUID: "com.slashpaf.audioforge.echo" })
 export class EchoAction extends SingletonAction<EchoSettings> {
@@ -71,11 +76,7 @@ export class EchoAction extends SingletonAction<EchoSettings> {
     audioForge.launchIfOffline();
     const { categoryUuid } = ev.payload.settings;
     if (!categoryUuid) return;
-    audioForge.send({ command: "playEcho", section: "Ambiance", categoryUuid });
-    // Brief visual feedback
-    if (ev.action.isKey()) {
-      await ev.action.showOk();
-    }
+    await this.playAndFlash(ev.action, ev.payload.settings);
   }
 
   override async onSendToPlugin(ev: SendToPluginEvent<JsonValue, EchoSettings>): Promise<void> {
@@ -127,6 +128,54 @@ export class EchoAction extends SingletonAction<EchoSettings> {
       const settings = (await action.getSettings()) as EchoSettings;
       await this.updateButton(action, settings);
     }
+  }
+
+  private flashTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  /**
+   * Play the echo and keep the key amber, like an active category, until it finishes.
+   * Audio Forge's reply carries durationMs; without it the key flashes briefly.
+   */
+  private async playAndFlash(act: any, settings: EchoSettings) {
+    const started = Date.now();
+    const icon = act.isKey() ? this.iconCache.get(settings.categoryUuid) ?? settings.iconData : "";
+    const restore = (afterMs: number) => {
+      clearTimeout(this.flashTimers.get(act.id));
+      const timer = setTimeout(() => {
+        this.flashTimers.delete(act.id);
+        act.setImage(icon).catch(() => {});
+      }, afterMs);
+      timer.unref();
+      this.flashTimers.set(act.id, timer);
+    };
+
+    if (icon) {
+      await act.setImage(makeActiveImage(icon, this.categoryColor(settings.categoryUuid)));
+      restore(MAX_FLASH_MS); // safety net until the reply says how long the echo is
+    }
+    try {
+      const reply = await audioForge.request({
+        command: "playEcho",
+        section: "Ambiance",
+        categoryUuid: settings.categoryUuid,
+      });
+      const duration = typeof reply.durationMs === "number" ? reply.durationMs : 0;
+      if (icon) {
+        const remaining = duration - (Date.now() - started);
+        restore(Math.min(MAX_FLASH_MS, Math.max(MIN_FLASH_MS, remaining)));
+      }
+    } catch (e) {
+      streamDeck.logger.warn(`Echo did not start: ${e instanceof Error ? e.message : e}`);
+      if (icon) restore(MIN_FLASH_MS);
+    }
+  }
+
+  private categoryColor(uuid: string): string | null {
+    for (const lib of audioForge.catalog?.libraries ?? []) {
+      const found = (lib.ambiance || []).find((c) => c.uuid === uuid);
+      if (found) return found.color ?? null;
+    }
+    return null;
   }
 
   private async updateButton(act: any, settings: EchoSettings) {

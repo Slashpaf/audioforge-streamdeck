@@ -61,7 +61,7 @@ export interface CommandResult {
 }
 
 export interface WsMessage {
-  type: "state" | "catalog" | "result" | "echo" | "saved_states";
+  type: "state" | "catalog" | "result" | "echo" | "echoes" | "saved_states";
   [key: string]: JsonValue;
 }
 
@@ -138,4 +138,13 @@ export interface GlobalSettings {
   port: number;
   apiKey: string;
   [key: string]: JsonValue;
+}
+
+/** One entry of the `echoes` message: an echo that is playing right now, however it was started. */
+export interface ActiveEcho {
+  playbackId: string;
+  categoryUuid: string;
+  durationMs: number | null;
+  positionMs: number | null;
+  remainingMs: number | null;
 }

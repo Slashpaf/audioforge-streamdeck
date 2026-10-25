@@ -11,12 +11,14 @@ import streamDeck, {
 import type { JsonValue } from "@elgato/utils";
 import { audioForge } from "../audioforge-client";
 import { ENABLED_BG, makeActiveImage, makeFilledImage } from "../image-utils";
-import type { AudioForgeState, EchoSettings } from "../types";
+import type { ActiveEcho, AudioForgeState, EchoSettings } from "../types";
 
 /** Audio Forge fills a tile for at least this long, even when it does not know the echo's length. */
 const MIN_FILL_MS = 400;
 /** How often the fill is redrawn on the key. */
 const TICK_MS = 150;
+/** After a long press stops the echoes, pushes that were already in flight are ignored for this long. */
+const STOP_QUIET_MS = 800;
 /** Idle key background behind the translucent fill. */
 const IDLE_BG = "#000000";
 /** Holding the key this long stops the category, or enables it in the background when idle. */
@@ -48,6 +50,12 @@ export class EchoAction extends SingletonAction<EchoSettings> {
     if (connected) this.pushCategoriesToOpenPI();
   };
   private attached = false;
+  /** Echo keys currently on a deck, so a push can be matched to them without asking Stream Deck. */
+  private keys = new Map<string, { act: any; settings: EchoSettings }>();
+  private stoppedAt = new Map<string, number>();
+  private echoesListener = (echoes: ActiveEcho[]) => {
+    void this.applyEchoes(echoes);
+  };
 
   private attach() {
     if (this.attached) return;
@@ -55,6 +63,7 @@ export class EchoAction extends SingletonAction<EchoSettings> {
     audioForge.onState(this.stateListener as any);
     audioForge.onCatalog(this.catalogListener);
     audioForge.onConnection(this.connListener);
+    audioForge.onEchoes(this.echoesListener);
   }
 
   private detach() {
@@ -62,14 +71,20 @@ export class EchoAction extends SingletonAction<EchoSettings> {
     audioForge.offState(this.stateListener as any);
     audioForge.offCatalog(this.catalogListener);
     audioForge.offConnection(this.connListener);
+    audioForge.offEchoes(this.echoesListener);
   }
 
   override async onWillAppear(ev: WillAppearEvent<EchoSettings>): Promise<void> {
     this.attach();
+    this.keys.set(ev.action.id, { act: ev.action, settings: ev.payload.settings });
     await this.updateButton(ev.action, ev.payload.settings);
+    await this.applyEchoes(audioForge.echoes, ev.action.id);
   }
 
-  override async onWillDisappear(_ev: WillDisappearEvent<EchoSettings>): Promise<void> {
+  override async onWillDisappear(ev: WillDisappearEvent<EchoSettings>): Promise<void> {
+    this.keys.delete(ev.action.id);
+    this.stoppedAt.delete(ev.action.id);
+    this.clearFills(ev.action.id);
     let count = 0;
     for (const _ of this.actions) count++;
     if (count === 0) this.detach();
@@ -82,6 +97,7 @@ export class EchoAction extends SingletonAction<EchoSettings> {
       settings = { ...settings, categoryName: resolved };
       await ev.action.setSettings(settings);
     }
+    this.keys.set(ev.action.id, { act: ev.action, settings });
     await this.updateButton(ev.action, settings);
   }
 
@@ -163,15 +179,18 @@ export class EchoAction extends SingletonAction<EchoSettings> {
 
   private pressTimers = new Map<string, ReturnType<typeof setTimeout>>();
   /** Echoes playing from each key. Each one draws a bar that grows over the echo's length. */
-  private fills = new Map<string, { start: number; duration: number; color: string }[]>();
+  private fills = new Map<string, Map<string, { start: number; duration: number; color: string }>>();
   private tickers = new Map<string, ReturnType<typeof setInterval>>();
 
   private activeFills(id: string) {
     const now = Date.now();
-    const list = (this.fills.get(id) ?? []).filter((f) => now - f.start < f.duration);
-    if (list.length > 0) this.fills.set(id, list);
-    else this.fills.delete(id);
-    return list;
+    const byEcho = this.fills.get(id);
+    if (!byEcho) return [];
+    for (const [playbackId, f] of byEcho) {
+      if (now - f.start >= f.duration) byEcho.delete(playbackId);
+    }
+    if (byEcho.size === 0) this.fills.delete(id);
+    return [...byEcho.values()];
   }
 
   /** True while an echo started from this key is still playing. */
@@ -227,6 +246,7 @@ export class EchoAction extends SingletonAction<EchoSettings> {
     const echoPlaying = this.isLit(act.id);
     const ambianceActive = this.isAmbianceActive(uuid);
     this.clearFills(act.id);
+    this.stoppedAt.set(act.id, Date.now());
     // What the key should show once the command succeeds; the state broadcast that follows lags by ~250 ms.
     const enabling = !(echoPlaying || ambianceActive);
     let ok = true;
@@ -247,6 +267,51 @@ export class EchoAction extends SingletonAction<EchoSettings> {
   }
 
   /**
+   * Show the echoes Audio Forge says are playing, including ones started inside the app, on the keys of
+   * their category. Audio Forge pushes the list when an echo starts or stops, so there is no polling; versions
+   * that do not push it simply never call this, and keys then only show echoes they started themselves.
+   * `onlyKey` limits the update to one key (used when a key appears).
+   */
+  private async applyEchoes(echoes: ActiveEcho[], onlyKey?: string) {
+    const received = Date.now();
+    for (const [id, { act, settings }] of this.keys) {
+      if (onlyKey && id !== onlyKey) continue;
+      if (!act.isKey() || !settings.categoryUuid) continue;
+      if (received - (this.stoppedAt.get(id) ?? 0) < STOP_QUIET_MS) continue;
+      const wanted = echoes.filter(
+        (e) => e.categoryUuid === settings.categoryUuid && !(typeof e.remainingMs === "number" && e.remainingMs <= 0),
+      );
+      const byEcho = this.fills.get(id) ?? new Map();
+      const color = this.categoryColor(settings.categoryUuid) ?? "#ffb300";
+      let changed = false;
+      for (const e of wanted) {
+        if (byEcho.has(e.playbackId)) continue;
+        // The message is sent when the echo registers, so its position says how far along it already is.
+        byEcho.set(e.playbackId, {
+          start: received - (e.positionMs ?? 0),
+          duration: Math.max(MIN_FILL_MS, e.durationMs ?? 0),
+          color,
+        });
+        changed = true;
+      }
+      // Anything missing from the list has stopped, wherever it was stopped.
+      const ids = new Set(wanted.map((e) => e.playbackId));
+      for (const playbackId of [...byEcho.keys()]) {
+        if (!ids.has(playbackId)) {
+          byEcho.delete(playbackId);
+          changed = true;
+        }
+      }
+      if (byEcho.size > 0) this.fills.set(id, byEcho);
+      else this.fills.delete(id);
+      if (!changed) continue;
+      if (byEcho.size > 0) this.startTicker(act, settings);
+      else this.clearFills(id);
+      await this.settleImage(act, settings);
+    }
+  }
+
+  /**
    * Play the echo and fill the key from the left over the echo's length, like Audio Forge's own tile.
    * The reply to playEcho carries durationMs.
    */
@@ -258,13 +323,17 @@ export class EchoAction extends SingletonAction<EchoSettings> {
       );
       if (!act.isKey()) return;
       const length = typeof reply.durationMs === "number" ? reply.durationMs : 0;
-      const list = this.fills.get(act.id) ?? [];
-      list.push({
-        start: Date.now(),
-        duration: Math.max(MIN_FILL_MS, length),
-        color: this.categoryColor(settings.categoryUuid) ?? "#ffb300",
-      });
-      this.fills.set(act.id, list);
+      // Newer Audio Forge versions also push this echo in an `echoes` message, with the same playbackId.
+      const playbackId = typeof reply.playbackId === "string" ? reply.playbackId : `local-${Date.now()}`;
+      const byEcho = this.fills.get(act.id) ?? new Map();
+      if (!byEcho.has(playbackId)) {
+        byEcho.set(playbackId, {
+          start: Date.now(),
+          duration: Math.max(MIN_FILL_MS, length),
+          color: this.categoryColor(settings.categoryUuid) ?? "#ffb300",
+        });
+      }
+      this.fills.set(act.id, byEcho);
       this.startTicker(act, settings);
       await this.settleImage(act, settings);
     } catch (e) {

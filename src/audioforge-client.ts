@@ -2,6 +2,7 @@ import { exec, spawn } from "child_process";
 import streamDeck from "@elgato/streamdeck";
 import WebSocket from "ws";
 import type {
+  ActiveEcho,
   AudioForgeCatalog,
   AudioForgeState,
   CommandPayload,
@@ -15,6 +16,7 @@ type StateListener = (state: AudioForgeState) => void;
 type CatalogListener = (catalog: AudioForgeCatalog) => void;
 type ConnectionListener = (connected: boolean) => void;
 type SavedStatesListener = (states: SavedStateInfo[]) => void;
+type EchoesListener = (echoes: ActiveEcho[]) => void;
 
 /**
  * Singleton WebSocket client that maintains a persistent connection to the
@@ -40,6 +42,8 @@ class AudioForgeClient {
   private catalogListeners: CatalogListener[] = [];
   private connectionListeners: ConnectionListener[] = [];
   private savedStatesListeners: SavedStatesListener[] = [];
+  private echoesListeners: EchoesListener[] = [];
+  private _echoes: ActiveEcho[] = [];
 
   get isConnected(): boolean {
     return this._connected;
@@ -49,6 +53,10 @@ class AudioForgeClient {
   }
   get catalog(): AudioForgeCatalog | null {
     return this._catalog;
+  }
+  /** Echoes playing right now, as last pushed by Audio Forge (empty with versions that do not push them). */
+  get echoes(): ActiveEcho[] {
+    return this._echoes;
   }
   get savedStates(): SavedStateInfo[] {
     return this._savedStates;
@@ -83,6 +91,13 @@ class AudioForgeClient {
   }
   offConnection(fn: ConnectionListener) {
     this.connectionListeners = this.connectionListeners.filter((f) => f !== fn);
+  }
+
+  onEchoes(fn: EchoesListener) {
+    this.echoesListeners.push(fn);
+  }
+  offEchoes(fn: EchoesListener) {
+    this.echoesListeners = this.echoesListeners.filter((f) => f !== fn);
   }
 
   onSavedStates(fn: SavedStatesListener) {
@@ -210,6 +225,7 @@ class AudioForgeClient {
       streamDeck.logger.info("Disconnected from AudioForge");
       this._connected = false;
       this.rejectPending(new Error("Audio Forge connection closed"));
+      this._echoes = [];
       this.notify(this.connectionListeners, false);
       this.scheduleReconnect();
     });
@@ -365,6 +381,10 @@ class AudioForgeClient {
       case "saved_states":
         this._savedStates = (msg as unknown as SavedStatesList).savedStates ?? [];
         this.notify(this.savedStatesListeners, this._savedStates);
+        break;
+      case "echoes":
+        this._echoes = Array.isArray(msg.echoes) ? (msg.echoes as unknown as ActiveEcho[]) : [];
+        this.notify(this.echoesListeners, this._echoes);
         break;
       case "result": {
         const requestId = typeof msg.requestId === "string" ? msg.requestId : null;

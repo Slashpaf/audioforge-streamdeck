@@ -1,0 +1,34 @@
+/* Shared PI styles for AudioForge Stream Deck plugin */
+.connection-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: #999;
+}
+
+.connection-bar .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #f44336;
+  flex-shrink: 0;
+}
+
+.connection-bar .dot.ok {
+  background: #4caf50;
+}
+
+.section-divider {
+  border: none;
+  border-top: 1px solid #3a3a3c;
+  margin: 12px 0;
+}
+
+.help-text {
+  font-size: 11px;
+  color: #888;
+  padding: 2px 8px;
+}

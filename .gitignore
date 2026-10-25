@@ -1,0 +1,12 @@
+node_modules/
+com.slashpaf.audioforge.sdPlugin/bin/
+com.slashpaf.audioforge.sdPlugin/logs/
+*.streamDeckPlugin
+*.zip
+*.zip.sha256
+*.log
+*.pem
+.env
+.env.*
+.DS_Store
+/dist/

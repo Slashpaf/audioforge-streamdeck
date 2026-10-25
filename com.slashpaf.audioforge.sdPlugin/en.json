@@ -1,0 +1,32 @@
+{
+  "Name": "Audio Forge",
+  "Description": "Control Audio Forge ambiance and music playback from your Stream Deck",
+  "com.slashpaf.audioforge.play-pause": {
+    "Name": "Play / Pause",
+    "Tooltip": "Toggle play/pause for Music or Ambiance"
+  },
+  "com.slashpaf.audioforge.stop": {
+    "Name": "Stop",
+    "Tooltip": "Stop Music, Ambiance, Echoes, or all playback"
+  },
+  "com.slashpaf.audioforge.next-track": {
+    "Name": "Next Track",
+    "Tooltip": "Skip to the next track in the active Music or Ambiance categories"
+  },
+  "com.slashpaf.audioforge.category": {
+    "Name": "Category",
+    "Tooltip": "Play or toggle a specific category"
+  },
+  "com.slashpaf.audioforge.echo": {
+    "Name": "Echo",
+    "Tooltip": "Trigger a one-shot echo sound"
+  },
+  "com.slashpaf.audioforge.volume": {
+    "Name": "Volume",
+    "Tooltip": "Set or adjust volume for Music or Ambiance"
+  },
+  "com.slashpaf.audioforge.library": {
+    "Name": "Library",
+    "Tooltip": "Switch to a specific library"
+  }
+}

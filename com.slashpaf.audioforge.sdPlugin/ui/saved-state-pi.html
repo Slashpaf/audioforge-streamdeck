@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head lang="en">
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="./pi-styles.css" />
+  <script src="./vendor/sdpi-components.v3.0.2.js"></script>
+  <script src="./common.js"></script>
+</head>
+<body>
+  <div class="connection-bar">
+    <span class="dot" id="status-dot"></span>
+    <span id="connection-status">Checking...</span>
+  </div>
+
+  <sdpi-item label="Saved State">
+    <sdpi-select setting="stateId" datasource="getSavedStates" placeholder="Select a state..."></sdpi-select>
+  </sdpi-item>
+
+  <hr class="section-divider" />
+  <p class="help-text">Restores the selected saved state: switches library and restores the music and ambiance exactly as saved.</p>
+
+  <hr class="section-divider" />
+  <details>
+    <summary style="font-size:12px; color:#999; cursor:pointer;">Connection Settings</summary>
+    <sdpi-item label="Host">
+      <sdpi-textfield setting="host" id="host-input" global placeholder="localhost"></sdpi-textfield>
+    </sdpi-item>
+    <sdpi-item label="Port">
+      <sdpi-textfield setting="port" id="port-input" global placeholder="8329"></sdpi-textfield>
+    </sdpi-item>
+    <sdpi-item label="API Key">
+      <sdpi-password setting="apiKey" id="apikey-input" global placeholder="(optional)"></sdpi-password>
+    </sdpi-item>
+  </details>
+
+  <script>
+    setTimeout(() => {
+      updateConnectionStatus();
+      startConnectionPolling(['[datasource="getSavedStates"]']);
+    }, 500);
+  </script>
+</body>
+</html>

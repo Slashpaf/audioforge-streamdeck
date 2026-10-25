@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+<head lang="en">
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="./pi-styles.css" />
+  <script src="./vendor/sdpi-components.v3.0.2.js"></script>
+  <script src="./common.js"></script>
+  <style>
+    .range-row { display:flex; align-items:center; gap:8px; }
+    .range-row sdpi-range { flex:1; }
+    .range-val { font-size:12px; color:#ccc; min-width:38px; text-align:right; font-variant-numeric:tabular-nums; }
+  </style>
+</head>
+<body>
+  <div class="connection-bar">
+    <span class="dot" id="status-dot"></span>
+    <span id="connection-status">Checking...</span>
+  </div>
+
+  <sdpi-item label="Section">
+    <sdpi-select setting="section">
+      <option value="Music">Music</option>
+      <option value="Ambiance">Ambiance</option>
+      <option value="Echoes">Echoes</option>
+    </sdpi-select>
+  </sdpi-item>
+
+  <sdpi-item label="Category">
+    <sdpi-select setting="categoryUuid" datasource="getCategories" placeholder="Whole section"></sdpi-select>
+  </sdpi-item>
+  <p class="help-text" style="margin-top:2px;">Optional (Music and Ambiance). Controls one category's volume instead of the whole section.</p>
+
+  <sdpi-item label="Dial Step">
+    <div class="range-row">
+      <sdpi-range id="step-range" setting="step" min="1" max="20" default="5" showlabels></sdpi-range>
+      <span class="range-val" id="step-val">5%</span>
+    </div>
+  </sdpi-item>
+  <p class="help-text" style="margin-top:2px;">Volume change per dial click (1% – 20%)</p>
+
+  <hr class="section-divider" />
+  <p class="help-text">
+    <b>Dial rotate:</b> adjusts volume by the step amount.<br/>
+    <b>Dial press:</b> toggles mute / unmute.
+  </p>
+
+  <hr class="section-divider" />
+  <details>
+    <summary style="font-size:12px;color:#999;cursor:pointer;">Connection Settings</summary>
+    <sdpi-item label="Host"><sdpi-textfield setting="host" id="host-input" global placeholder="localhost"></sdpi-textfield></sdpi-item>
+    <sdpi-item label="Port"><sdpi-textfield setting="port" id="port-input" global placeholder="8329"></sdpi-textfield></sdpi-item>
+    <sdpi-item label="API Key"><sdpi-password setting="apiKey" id="apikey-input" global placeholder="(optional)"></sdpi-password></sdpi-item>
+  </details>
+
+  <script>
+    function watchRange(id, displayId, format) {
+      const el = document.getElementById(id), disp = document.getElementById(displayId);
+      if (!el || !disp) return;
+      const update = (val) => { const v = val ?? el.value; if (v != null && v !== '') disp.textContent = format(String(v)); };
+      el.addEventListener('change', (e) => { const v = typeof e.detail === 'object' ? e.detail?.value : e.detail; setTimeout(() => update(v), 0); });
+      const inner = () => { const i = el.shadowRoot?.querySelector('input'); if (i) i.addEventListener('input', () => update(i.value)); };
+      setTimeout(inner, 300);
+      const poll = setInterval(() => { if (el.value != null && el.value !== '') { update(); clearInterval(poll); } }, 150);
+      setTimeout(() => clearInterval(poll), 4000);
+    }
+    watchRange('step-range', 'step-val', (v) => `${v}%`);
+    setTimeout(() => { updateConnectionStatus(); startConnectionPolling(); }, 500);
+  </script>
+</body>
+</html>

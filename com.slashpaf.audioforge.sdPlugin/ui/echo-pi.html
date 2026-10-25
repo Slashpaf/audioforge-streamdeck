@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head lang="en">
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="./pi-styles.css" />
+  <script src="./vendor/sdpi-components.v3.0.2.js"></script>
+  <script src="./common.js"></script>
+</head>
+<body>
+  <div class="connection-bar">
+    <span class="dot" id="status-dot"></span>
+    <span id="connection-status">Checking...</span>
+  </div>
+
+  <sdpi-item label="Category">
+    <sdpi-select setting="categoryUuid" datasource="getCategories" placeholder="Select a category..."></sdpi-select>
+  </sdpi-item>
+
+  <hr class="section-divider" />
+  <p class="help-text">Triggers a one-shot echo sound for the selected category.</p>
+
+  <hr class="section-divider" />
+  <details>
+    <summary style="font-size:12px; color:#999; cursor:pointer;">Connection Settings</summary>
+    <sdpi-item label="Host">
+      <sdpi-textfield setting="host" id="host-input" global placeholder="localhost"></sdpi-textfield>
+    </sdpi-item>
+    <sdpi-item label="Port">
+      <sdpi-textfield setting="port" id="port-input" global placeholder="8329"></sdpi-textfield>
+    </sdpi-item>
+    <sdpi-item label="API Key">
+      <sdpi-password setting="apiKey" id="apikey-input" global placeholder="(optional)"></sdpi-password>
+    </sdpi-item>
+  </details>
+
+  <script>
+    setTimeout(() => {
+      updateConnectionStatus();
+      startConnectionPolling(['[datasource="getCategories"]']);
+    }, 500);
+  </script>
+</body>
+</html>

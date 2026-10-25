@@ -1,0 +1,201 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "Name": "Audio Forge",
+  "Version": "1.0.4.0",
+  "Author": "Slashpaf",
+  "Actions": [
+    {
+      "Name": "Play / Pause",
+      "UUID": "com.slashpaf.audioforge.play-pause",
+      "Icon": "imgs/actions/play-pause/icon",
+      "Tooltip": "Toggle play/pause for Music or Ambiance",
+      "PropertyInspectorPath": "ui/play-pause-pi.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/play-pause/key-play",
+          "Name": "Paused",
+          "TitleAlignment": "bottom"
+        },
+        {
+          "Image": "imgs/actions/play-pause/key-pause",
+          "Name": "Playing",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Stop",
+      "UUID": "com.slashpaf.audioforge.stop",
+      "Icon": "imgs/actions/stop/icon",
+      "Tooltip": "Stop Music, Ambiance, Echoes, or all playback",
+      "PropertyInspectorPath": "ui/stop-pi.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/stop/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Next Track",
+      "UUID": "com.slashpaf.audioforge.next-track",
+      "Icon": "imgs/actions/next-track/icon",
+      "Tooltip": "Skip to the next track in the active Music or Ambiance categories",
+      "PropertyInspectorPath": "ui/next-track-pi.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/next-track/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Category",
+      "UUID": "com.slashpaf.audioforge.category",
+      "Icon": "imgs/actions/category/icon",
+      "Tooltip": "Play or toggle a specific category",
+      "PropertyInspectorPath": "ui/category-pi.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/category/key-off",
+          "Name": "Inactive",
+          "TitleAlignment": "bottom"
+        },
+        {
+          "Image": "imgs/actions/category/key-on",
+          "Name": "Active",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Echo",
+      "UUID": "com.slashpaf.audioforge.echo",
+      "Icon": "imgs/actions/echo/icon",
+      "Tooltip": "Trigger a one-shot echo sound",
+      "PropertyInspectorPath": "ui/echo-pi.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/echo/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Volume",
+      "UUID": "com.slashpaf.audioforge.volume-key",
+      "Icon": "imgs/actions/volume/icon",
+      "Tooltip": "Press to set volume to a preset value",
+      "PropertyInspectorPath": "ui/volume-key-pi.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/volume/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Volume",
+      "UUID": "com.slashpaf.audioforge.volume-dial",
+      "Icon": "imgs/actions/volume/icon",
+      "Tooltip": "Rotate to adjust volume, press to mute/unmute",
+      "PropertyInspectorPath": "ui/volume-dial-pi.html",
+      "Controllers": [
+        "Encoder"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/volume/key",
+          "TitleAlignment": "bottom"
+        }
+      ],
+      "Encoder": {
+        "layout": "$B1",
+        "TriggerDescription": {
+          "Rotate": "Adjust volume",
+          "Push": "Mute / Unmute"
+        }
+      }
+    },
+    {
+      "Name": "Library",
+      "UUID": "com.slashpaf.audioforge.library",
+      "Icon": "imgs/actions/library/icon",
+      "Tooltip": "Switch to a specific library",
+      "PropertyInspectorPath": "ui/library-pi.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/library/key-off",
+          "Name": "Inactive",
+          "TitleAlignment": "bottom"
+        },
+        {
+          "Image": "imgs/actions/library/key-on",
+          "Name": "Active",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Restore Saved State",
+      "UUID": "com.slashpaf.audioforge.saved-state",
+      "Icon": "imgs/actions/saved-state/icon",
+      "Tooltip": "Restore a named saved state",
+      "PropertyInspectorPath": "ui/saved-state-pi.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/saved-state/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    }
+  ],
+  "Category": "Audio Forge",
+  "CategoryIcon": "imgs/plugin/category-icon",
+  "CodePath": "bin/plugin.js",
+  "Description": "Control Audio Forge ambiance and music playback from your Stream Deck",
+  "Icon": "imgs/plugin/marketplace",
+  "SDKVersion": 3,
+  "Software": {
+    "MinimumVersion": "6.9"
+  },
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "10.15"
+    },
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "Nodejs": {
+    "Version": "20"
+  },
+  "UUID": "com.slashpaf.audioforge",
+  "URL": "https://slashpaf.com/audioforge/"
+}

@@ -1,0 +1,14 @@
+Audio Forge for Stream Deck includes the following third-party software:
+
+@elgato/streamdeck 2.0.4 — MIT — elgato-streamdeck-MIT.txt
+@elgato/utils 0.4.4 — MIT — elgato-utils-MIT.txt
+@elgato/schemas 0.4.15 — MIT — elgato-schemas-MIT.txt
+ws 8.21.3 — MIT — ws-MIT.txt
+zod 3.25.76 — MIT — zod-MIT.txt
+tslib 2.8.1 — 0BSD — tslib-0BSD.txt
+sdpi-components 3.0.2 — MIT — sdpi-components-MIT.txt
+Lit, bundled within sdpi-components — BSD-3-Clause — lit-BSD-3-Clause.txt
+
+The sdpi-components JavaScript bundle is under ui/vendor/ and retains its
+upstream license attribution header. npm package versions are recorded in the
+source repository's package-lock.json.

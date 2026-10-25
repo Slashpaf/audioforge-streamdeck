@@ -2,6 +2,7 @@ import streamDeck, {
   action,
   DidReceiveSettingsEvent,
   KeyDownEvent,
+  KeyUpEvent,
   SendToPluginEvent,
   SingletonAction,
   WillAppearEvent,
@@ -15,6 +16,8 @@ import type { EchoSettings } from "../types";
 /** The key stays amber for the echo's length, within these bounds. */
 const MIN_FLASH_MS = 350;
 const MAX_FLASH_MS = 30_000;
+/** Holding the key this long while its echo plays stops the echo. */
+const LONG_PRESS_MS = 500;
 
 @action({ UUID: "com.slashpaf.audioforge.echo" })
 export class EchoAction extends SingletonAction<EchoSettings> {
@@ -76,6 +79,28 @@ export class EchoAction extends SingletonAction<EchoSettings> {
     audioForge.launchIfOffline();
     const { categoryUuid } = ev.payload.settings;
     if (!categoryUuid) return;
+    const id = ev.action.id;
+    if (this.isLit(id)) {
+      // Its echo is still playing: hold to stop it, tap (decided on release) to play again.
+      clearTimeout(this.pressTimers.get(id));
+      const settings = ev.payload.settings;
+      const timer = setTimeout(() => {
+        this.pressTimers.delete(id);
+        void this.stopEcho(ev.action, settings);
+      }, LONG_PRESS_MS);
+      timer.unref();
+      this.pressTimers.set(id, timer);
+      return;
+    }
+    await this.playAndFlash(ev.action, ev.payload.settings);
+  }
+
+  override async onKeyUp(ev: KeyUpEvent<EchoSettings>): Promise<void> {
+    const id = ev.action.id;
+    const timer = this.pressTimers.get(id);
+    if (!timer) return; // Not waiting on a long press, or it already fired and stopped the echo.
+    clearTimeout(timer);
+    this.pressTimers.delete(id);
     await this.playAndFlash(ev.action, ev.payload.settings);
   }
 
@@ -131,6 +156,27 @@ export class EchoAction extends SingletonAction<EchoSettings> {
   }
 
   private flashTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** When each key stops being amber, i.e. when its echo is expected to end. */
+  private litUntil = new Map<string, number>();
+  private pressTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  private isLit(id: string): boolean {
+    return (this.litUntil.get(id) ?? 0) > Date.now();
+  }
+
+  /** Stop every running echo of this key's category and put the normal icon back. */
+  private async stopEcho(act: any, settings: EchoSettings) {
+    clearTimeout(this.flashTimers.get(act.id));
+    this.flashTimers.delete(act.id);
+    this.litUntil.delete(act.id);
+    try {
+      await audioForge.request({ command: "stopEcho", categoryUuid: settings.categoryUuid });
+    } catch (e) {
+      streamDeck.logger.warn(`Echo did not stop: ${e instanceof Error ? e.message : e}`);
+    }
+    const icon = this.iconCache.get(settings.categoryUuid) ?? settings.iconData;
+    if (icon) await act.setImage(icon).catch(() => {});
+  }
 
   /**
    * Play the echo and keep the key amber, like an active category, until it finishes.
@@ -141,8 +187,10 @@ export class EchoAction extends SingletonAction<EchoSettings> {
     const icon = act.isKey() ? this.iconCache.get(settings.categoryUuid) ?? settings.iconData : "";
     const restore = (afterMs: number) => {
       clearTimeout(this.flashTimers.get(act.id));
+      this.litUntil.set(act.id, Date.now() + afterMs);
       const timer = setTimeout(() => {
         this.flashTimers.delete(act.id);
+        this.litUntil.delete(act.id);
         act.setImage(icon).catch(() => {});
       }, afterMs);
       timer.unref();

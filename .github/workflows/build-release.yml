@@ -59,8 +59,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           mkdir -p release-files
-          cp dist/elgato/com.slashpaf.audioforge.streamDeckPlugin* release-files/
-          cp dist/opendeck/Audio-Forge-v*-opendeck.zip* release-files/
+          # GitHub shows a SHA-256 digest for every release file, so no separate checksum files.
+          cp dist/elgato/com.slashpaf.audioforge.streamDeckPlugin release-files/
+          cp dist/opendeck/Audio-Forge-v*-opendeck.zip release-files/
 
       - name: Upload release files
         if: startsWith(github.ref, 'refs/tags/v')

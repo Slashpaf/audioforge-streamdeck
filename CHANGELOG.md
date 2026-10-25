@@ -4,7 +4,8 @@ All notable changes to this plugin. Versions follow `package.json`; each release
 
 ## 1.0.5
 
-- **OpenDeck:** each release now also attaches `Audio-Forge-vX.Y.Z-opendeck.zip` (with a SHA-256 checksum), the plugin folder in a ZIP that OpenDeck accepts through Install from file.
+- **OpenDeck:** each release now also attaches `Audio-Forge-vX.Y.Z-opendeck.zip`, the plugin folder in a ZIP that OpenDeck accepts through Install from file.
+- Releases no longer attach separate `.sha256` files; GitHub already shows the SHA-256 of every file.
 
 ## 1.0.4
 

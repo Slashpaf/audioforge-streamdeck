@@ -31,7 +31,7 @@ The manifest retains Elgato's standard `mac` and `windows` platform declarations
 
 Download the `.streamDeckPlugin` file from the latest [GitHub Release](../../releases/latest) and install it from OpenDeck's plugin manager using **Install from file**.
 
-The release installer contains the plugin bundle. Verify its SHA-256 against the adjacent `.sha256` file if desired. OpenDeck also accepts the `Audio-Forge-vX.Y.Z-opendeck.zip` archive attached to each release.
+The release installer contains the plugin bundle. GitHub lists the SHA-256 of every release file if you want to verify a download. OpenDeck also accepts the `Audio-Forge-vX.Y.Z-opendeck.zip` archive attached to each release.
 
 ## Configure the Local API
 

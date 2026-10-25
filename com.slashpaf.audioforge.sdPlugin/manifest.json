@@ -1,7 +1,7 @@
 {
   "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
   "Name": "Audio Forge",
-  "Version": "1.0.4.0",
+  "Version": "1.0.5.0",
   "Author": "Slashpaf",
   "Actions": [
     {

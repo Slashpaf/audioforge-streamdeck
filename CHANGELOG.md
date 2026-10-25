@@ -2,6 +2,10 @@
 
 All notable changes to this plugin. Versions follow `package.json`; each release has a matching `vX.Y.Z` tag.
 
+## 1.0.5
+
+- **OpenDeck:** each release now also attaches `Audio-Forge-vX.Y.Z-opendeck.zip` (with a SHA-256 checksum), the plugin folder in a ZIP that OpenDeck accepts through Install from file.
+
 ## 1.0.4
 
 Everything since 1.0.2, the last version before the public release. This is also the first release published here.

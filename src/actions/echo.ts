@@ -75,30 +75,26 @@ export class EchoAction extends SingletonAction<EchoSettings> {
     await this.updateButton(ev.action, settings);
   }
 
+  // Like the Echo screen in Audio Forge: a tap (decided on release) plays the echo, and a long press
+  // stops everything of this category, or, when nothing is playing, enables it as a background ambiance.
   override async onKeyDown(ev: KeyDownEvent<EchoSettings>): Promise<void> {
     audioForge.launchIfOffline();
-    const { categoryUuid } = ev.payload.settings;
-    if (!categoryUuid) return;
+    const settings = ev.payload.settings;
+    if (!settings.categoryUuid) return;
     const id = ev.action.id;
-    if (this.isLit(id)) {
-      // Its echo is still playing: hold to stop it, tap (decided on release) to play again.
-      clearTimeout(this.pressTimers.get(id));
-      const settings = ev.payload.settings;
-      const timer = setTimeout(() => {
-        this.pressTimers.delete(id);
-        void this.stopEcho(ev.action, settings);
-      }, LONG_PRESS_MS);
-      timer.unref();
-      this.pressTimers.set(id, timer);
-      return;
-    }
-    await this.playAndFlash(ev.action, ev.payload.settings);
+    clearTimeout(this.pressTimers.get(id));
+    const timer = setTimeout(() => {
+      this.pressTimers.delete(id);
+      void this.onLongPress(ev.action, settings);
+    }, LONG_PRESS_MS);
+    timer.unref();
+    this.pressTimers.set(id, timer);
   }
 
   override async onKeyUp(ev: KeyUpEvent<EchoSettings>): Promise<void> {
     const id = ev.action.id;
     const timer = this.pressTimers.get(id);
-    if (!timer) return; // Not waiting on a long press, or it already fired and stopped the echo.
+    if (!timer) return; // The long press already fired.
     clearTimeout(timer);
     this.pressTimers.delete(id);
     await this.playAndFlash(ev.action, ev.payload.settings);
@@ -164,18 +160,43 @@ export class EchoAction extends SingletonAction<EchoSettings> {
     return (this.litUntil.get(id) ?? 0) > Date.now();
   }
 
-  /** Stop every running echo of this key's category and put the normal icon back. */
-  private async stopEcho(act: any, settings: EchoSettings) {
+  /** True while the category runs as a normal (background) ambiance. */
+  private isAmbianceActive(uuid: string): boolean {
+    const state = audioForge.state;
+    return !!state?.ambiancePlaying && (state.ambianceCategories ?? []).some((c) => c.uuid === uuid);
+  }
+
+  /** Show the idle icon, or the amber one while the category runs as an ambiance. */
+  private async settleImage(act: any, settings: EchoSettings) {
+    if (!act.isKey()) return;
+    const icon = this.iconCache.get(settings.categoryUuid) ?? settings.iconData;
+    if (!icon) return;
+    const image = this.isAmbianceActive(settings.categoryUuid)
+      ? makeActiveImage(icon, this.categoryColor(settings.categoryUuid))
+      : icon;
+    await act.setImage(image).catch(() => {});
+  }
+
+  private async onLongPress(act: any, settings: EchoSettings) {
+    const uuid = settings.categoryUuid;
+    const echoPlaying = this.isLit(act.id);
+    const ambianceActive = this.isAmbianceActive(uuid);
     clearTimeout(this.flashTimers.get(act.id));
     this.flashTimers.delete(act.id);
     this.litUntil.delete(act.id);
     try {
-      await audioForge.request({ command: "stopEcho", categoryUuid: settings.categoryUuid });
+      if (echoPlaying || ambianceActive) {
+        await audioForge.request({ command: "stopEcho", categoryUuid: uuid });
+        if (ambianceActive) {
+          await audioForge.request({ command: "setCategoryEnabled", section: "Ambiance", categoryUuid: uuid, enabled: false });
+        }
+      } else {
+        await audioForge.request({ command: "setCategoryEnabled", section: "Ambiance", categoryUuid: uuid, enabled: true });
+      }
     } catch (e) {
-      streamDeck.logger.warn(`Echo did not stop: ${e instanceof Error ? e.message : e}`);
+      streamDeck.logger.warn(`Echo long press failed: ${e instanceof Error ? e.message : e}`);
     }
-    const icon = this.iconCache.get(settings.categoryUuid) ?? settings.iconData;
-    if (icon) await act.setImage(icon).catch(() => {});
+    await this.settleImage(act, settings);
   }
 
   /**
@@ -191,7 +212,7 @@ export class EchoAction extends SingletonAction<EchoSettings> {
       const timer = setTimeout(() => {
         this.flashTimers.delete(act.id);
         this.litUntil.delete(act.id);
-        act.setImage(icon).catch(() => {});
+        void this.settleImage(act, settings);
       }, afterMs);
       timer.unref();
       this.flashTimers.set(act.id, timer);
@@ -235,8 +256,10 @@ export class EchoAction extends SingletonAction<EchoSettings> {
       return;
     }
     await act.setTitle(name);
+    if (this.isLit(act.id)) return; // Keep the amber flash running while the echo plays.
     if (settings.categoryUuid) {
       await this.loadIcon(act, settings, settings.categoryUuid);
+      await this.settleImage(act, settings);
     }
   }
 

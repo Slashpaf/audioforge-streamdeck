@@ -10,13 +10,16 @@ import streamDeck, {
 } from "@elgato/streamdeck";
 import type { JsonValue } from "@elgato/utils";
 import { audioForge } from "../audioforge-client";
-import { ENABLED_BG, makeActiveImage } from "../image-utils";
+import { ENABLED_BG, makeActiveImage, makeFilledImage } from "../image-utils";
 import type { AudioForgeState, EchoSettings } from "../types";
 
-/** The key stays amber for the echo's length, within these bounds. */
-const MIN_FLASH_MS = 350;
-const MAX_FLASH_MS = 30_000;
-/** Holding the key this long while its echo plays stops the echo. */
+/** Audio Forge fills a tile for at least this long, even when it does not know the echo's length. */
+const MIN_FILL_MS = 400;
+/** How often the fill is redrawn on the key. */
+const TICK_MS = 150;
+/** Idle key background behind the translucent fill. */
+const IDLE_BG = "#000000";
+/** Holding the key this long stops the category, or enables it in the background when idle. */
 const LONG_PRESS_MS = 500;
 
 @action({ UUID: "com.slashpaf.audioforge.echo" })
@@ -104,7 +107,7 @@ export class EchoAction extends SingletonAction<EchoSettings> {
     if (!timer) return; // The long press already fired.
     clearTimeout(timer);
     this.pressTimers.delete(id);
-    await this.playAndFlash(ev.action, ev.payload.settings);
+    await this.playEcho(ev.action, ev.payload.settings);
   }
 
   override async onSendToPlugin(ev: SendToPluginEvent<JsonValue, EchoSettings>): Promise<void> {
@@ -158,13 +161,28 @@ export class EchoAction extends SingletonAction<EchoSettings> {
     }
   }
 
-  private flashTimers = new Map<string, ReturnType<typeof setTimeout>>();
-  /** When each key stops being amber, i.e. when its echo is expected to end. */
-  private litUntil = new Map<string, number>();
   private pressTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  /** Echoes playing from each key. Each one draws a bar that grows over the echo's length. */
+  private fills = new Map<string, { start: number; duration: number; color: string }[]>();
+  private tickers = new Map<string, ReturnType<typeof setInterval>>();
 
+  private activeFills(id: string) {
+    const now = Date.now();
+    const list = (this.fills.get(id) ?? []).filter((f) => now - f.start < f.duration);
+    if (list.length > 0) this.fills.set(id, list);
+    else this.fills.delete(id);
+    return list;
+  }
+
+  /** True while an echo started from this key is still playing. */
   private isLit(id: string): boolean {
-    return (this.litUntil.get(id) ?? 0) > Date.now();
+    return this.activeFills(id).length > 0;
+  }
+
+  private clearFills(id: string) {
+    this.fills.delete(id);
+    clearInterval(this.tickers.get(id));
+    this.tickers.delete(id);
   }
 
   /** True while the category runs as a normal (background) ambiance. */
@@ -173,7 +191,10 @@ export class EchoAction extends SingletonAction<EchoSettings> {
     return !!state?.ambiancePlaying && (state.ambianceCategories ?? []).some((c) => c.uuid === uuid);
   }
 
-  /** Show the idle icon, or the amber one while the category runs as an ambiance. */
+  /**
+   * Draw the key: running echoes as growing bars in the category's color, on the darker amber when the
+   * category also runs as an ambiance, otherwise the plain icon. `active` overrides the ambiance state.
+   */
   private async settleImage(
     act: any,
     settings: EchoSettings,
@@ -182,19 +203,30 @@ export class EchoAction extends SingletonAction<EchoSettings> {
     if (!act.isKey()) return;
     const icon = this.iconCache.get(settings.categoryUuid) ?? settings.iconData;
     if (!icon) return;
-    const image = active
-      ? makeActiveImage(icon, this.categoryColor(settings.categoryUuid), ENABLED_BG)
-      : icon;
+    const now = Date.now();
+    const fills = this.activeFills(act.id).map((f) => ({ progress: (now - f.start) / f.duration, color: f.color }));
+    const color = this.categoryColor(settings.categoryUuid);
+    let image = icon;
+    if (fills.length > 0) image = makeFilledImage(icon, active ? ENABLED_BG : IDLE_BG, fills);
+    else if (active) image = makeActiveImage(icon, color, ENABLED_BG);
     await act.setImage(image).catch(() => {});
+  }
+
+  private startTicker(act: any, settings: EchoSettings) {
+    if (this.tickers.has(act.id)) return;
+    const ticker = setInterval(() => {
+      void this.settleImage(act, settings);
+      if (!this.isLit(act.id)) this.clearFills(act.id);
+    }, TICK_MS);
+    ticker.unref();
+    this.tickers.set(act.id, ticker);
   }
 
   private async onLongPress(act: any, settings: EchoSettings) {
     const uuid = settings.categoryUuid;
     const echoPlaying = this.isLit(act.id);
     const ambianceActive = this.isAmbianceActive(uuid);
-    clearTimeout(this.flashTimers.get(act.id));
-    this.flashTimers.delete(act.id);
-    this.litUntil.delete(act.id);
+    this.clearFills(act.id);
     // What the key should show once the command succeeds; the state broadcast that follows lags by ~250 ms.
     const enabling = !(echoPlaying || ambianceActive);
     let ok = true;
@@ -215,42 +247,28 @@ export class EchoAction extends SingletonAction<EchoSettings> {
   }
 
   /**
-   * Play the echo and keep the key amber, like an active category, until it finishes.
-   * Audio Forge's reply carries durationMs; without it the key flashes briefly.
+   * Play the echo and fill the key from the left over the echo's length, like Audio Forge's own tile.
+   * The reply to playEcho carries durationMs.
    */
-  private async playAndFlash(act: any, settings: EchoSettings) {
-    const started = Date.now();
-    const icon = act.isKey() ? this.iconCache.get(settings.categoryUuid) ?? settings.iconData : "";
-    const restore = (afterMs: number) => {
-      clearTimeout(this.flashTimers.get(act.id));
-      this.litUntil.set(act.id, Date.now() + afterMs);
-      const timer = setTimeout(() => {
-        this.flashTimers.delete(act.id);
-        this.litUntil.delete(act.id);
-        void this.settleImage(act, settings);
-      }, afterMs);
-      timer.unref();
-      this.flashTimers.set(act.id, timer);
-    };
-
-    if (icon) {
-      await act.setImage(makeActiveImage(icon, this.categoryColor(settings.categoryUuid)));
-      restore(MAX_FLASH_MS); // safety net until the reply says how long the echo is
-    }
+  private async playEcho(act: any, settings: EchoSettings) {
     try {
-      const reply = await audioForge.request({
-        command: "playEcho",
-        section: "Ambiance",
-        categoryUuid: settings.categoryUuid,
+      const reply = await audioForge.request(
+        { command: "playEcho", section: "Ambiance", categoryUuid: settings.categoryUuid },
+        12_000,
+      );
+      if (!act.isKey()) return;
+      const length = typeof reply.durationMs === "number" ? reply.durationMs : 0;
+      const list = this.fills.get(act.id) ?? [];
+      list.push({
+        start: Date.now(),
+        duration: Math.max(MIN_FILL_MS, length),
+        color: this.categoryColor(settings.categoryUuid) ?? "#ffb300",
       });
-      const duration = typeof reply.durationMs === "number" ? reply.durationMs : 0;
-      if (icon) {
-        const remaining = duration - (Date.now() - started);
-        restore(Math.min(MAX_FLASH_MS, Math.max(MIN_FLASH_MS, remaining)));
-      }
+      this.fills.set(act.id, list);
+      this.startTicker(act, settings);
+      await this.settleImage(act, settings);
     } catch (e) {
       streamDeck.logger.warn(`Echo did not start: ${e instanceof Error ? e.message : e}`);
-      if (icon) restore(MIN_FLASH_MS);
     }
   }
 
@@ -271,7 +289,7 @@ export class EchoAction extends SingletonAction<EchoSettings> {
       return;
     }
     await act.setTitle(name);
-    if (this.isLit(act.id)) return; // Keep the amber flash running while the echo plays.
+    if (this.isLit(act.id)) return; // Keep the fill running while the echo plays.
     if (settings.categoryUuid) {
       await this.loadIcon(act, settings, settings.categoryUuid);
       await this.settleImage(act, settings);

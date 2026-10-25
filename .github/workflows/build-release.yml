@@ -49,13 +49,25 @@ jobs:
             exit 1
           fi
           ./scripts/package-elgato.sh "dist/elgato"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload release installer
+      - name: Package and validate OpenDeck archive
+        shell: bash
+        run: ./scripts/package-plugin.sh "dist/opendeck/Audio-Forge-v${{ steps.package.outputs.version }}-opendeck.zip" --require-license
+
+      - name: Collect release files
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          mkdir -p release-files
+          cp dist/elgato/com.slashpaf.audioforge.streamDeckPlugin* release-files/
+          cp dist/opendeck/Audio-Forge-v*-opendeck.zip* release-files/
+
+      - name: Upload release files
         if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: plugin-release
-          path: dist/elgato/com.slashpaf.audioforge.streamDeckPlugin*
+          path: release-files/*
           if-no-files-found: error
 
   draft-release:

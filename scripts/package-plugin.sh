@@ -18,7 +18,7 @@ done
 
 version="$(node -p "require('./package.json').version")"
 plugin_dir="com.slashpaf.audioforge.sdPlugin"
-output_file="${output_file:-dist/opendeck/Audio-Forge-v${version}.zip}"
+output_file="${output_file:-dist/opendeck/Audio-Forge-v${version}-opendeck.zip}"
 if [[ "$output_file" != /* ]]; then output_file="$(pwd)/$output_file"; fi
 
 if [[ ! -s LICENSE ]]; then

@@ -31,7 +31,7 @@ The manifest retains Elgato's standard `mac` and `windows` platform declarations
 
 Download the `.streamDeckPlugin` file from the latest [GitHub Release](../../releases/latest) and install it from OpenDeck's plugin manager using **Install from file**.
 
-The release installer contains the plugin bundle. Verify its SHA-256 against the adjacent `.sha256` file if desired. OpenDeck also accepts the optional ZIP produced by the manual build.
+The release installer contains the plugin bundle. Verify its SHA-256 against the adjacent `.sha256` file if desired. OpenDeck also accepts the `Audio-Forge-vX.Y.Z-opendeck.zip` archive attached to each release.
 
 ## Configure the Local API
 
@@ -51,7 +51,7 @@ Requires Node.js 20.5.1 or newer and npm.
 
 The compiled entry point is `com.slashpaf.audioforge.sdPlugin/bin/plugin.js`. The build creates both package formats under `dist/`:
 
-- `dist/opendeck/Audio-Forge-v1.0.4.zip` — the unencrypted OpenDeck archive, with the `.sdPlugin` folder at its root and a SHA-256 checksum beside it.
+- `dist/opendeck/Audio-Forge-v1.0.5-opendeck.zip` — the unencrypted OpenDeck archive, with the `.sdPlugin` folder at its root and a SHA-256 checksum beside it.
 - `dist/elgato/com.slashpaf.audioforge.streamDeckPlugin` — the Elgato installer for Stream Deck and Maker Console submission.
 
 The Elgato package is unencrypted when produced locally; Marketplace DRM is applied after Elgato processes it in Maker Console. The build requires the pinned Elgato CLI installed by `npm ci`. Both packaging targets include the root `LICENSE` and `ASSET_LICENSE.md`, and filter logs, source maps, local environment files, and common credential files. Linux/macOS packaging also requires `zip`, `unzip`, and either `sha256sum` or `shasum`; on Windows, `build.bat` uses PowerShell.

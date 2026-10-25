@@ -8,7 +8,7 @@ $repo = (Get-Location).Path
 $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
 $pluginDir = "com.slashpaf.audioforge.sdPlugin"
 if ([string]::IsNullOrWhiteSpace($OutputFile)) {
-    $OutputFile = Join-Path "dist/opendeck" "Audio-Forge-v$version.zip"
+    $OutputFile = Join-Path "dist/opendeck" "Audio-Forge-v$version-opendeck.zip"
 }
 if (-not [System.IO.Path]::IsPathRooted($OutputFile)) {
     $OutputFile = Join-Path $repo $OutputFile

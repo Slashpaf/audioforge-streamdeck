@@ -15,11 +15,11 @@ export class StopAction extends SingletonAction<StopSettings> {
     if (!settings.section) {
       await ev.action.setSettings({ section: "All" });
     }
-    await ev.action.setTitle(settings.section || "All");
+    if (ev.action.isKey()) await ev.action.setTitle(settings.section || "All");
   }
 
   override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<StopSettings>): Promise<void> {
-    await ev.action.setTitle(ev.payload.settings.section || "All");
+    if (ev.action.isKey()) await ev.action.setTitle(ev.payload.settings.section || "All");
   }
 
   override async onKeyDown(ev: KeyDownEvent<StopSettings>): Promise<void> {

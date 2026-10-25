@@ -46,6 +46,10 @@ const _origEmit = (WebSocket as any).prototype.emit;
 // Keep release logs concise; temporarily use "debug" during local diagnosis.
 streamDeck.logger.setLevel("info");
 
+// SDK v3 defaults to the new onDidReceiveSettings behavior, which needs Stream Deck 7.1.
+// The actions here were written for the legacy behavior and the manifest supports 6.9.
+streamDeck.settings.useLegacySettingsBehavior = true;
+
 // Register all actions
 streamDeck.actions.registerAction(new PlayPauseAction());
 streamDeck.actions.registerAction(new StopAction());

@@ -15,11 +15,11 @@ export class NextTrackAction extends SingletonAction<NextTrackSettings> {
     if (!settings.section) {
       await ev.action.setSettings({ section: "Music" });
     }
-    await ev.action.setTitle(settings.section || "Music");
+    if (ev.action.isKey()) await ev.action.setTitle(settings.section || "Music");
   }
 
   override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<NextTrackSettings>): Promise<void> {
-    await ev.action.setTitle(ev.payload.settings.section || "Music");
+    if (ev.action.isKey()) await ev.action.setTitle(ev.payload.settings.section || "Music");
   }
 
   override async onKeyDown(ev: KeyDownEvent<NextTrackSettings>): Promise<void> {

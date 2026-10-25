@@ -10,8 +10,8 @@ import streamDeck, {
 } from "@elgato/streamdeck";
 import type { JsonValue } from "@elgato/utils";
 import { audioForge } from "../audioforge-client";
-import { makeActiveImage } from "../image-utils";
-import type { EchoSettings } from "../types";
+import { ENABLED_BG, makeActiveImage } from "../image-utils";
+import type { AudioForgeState, EchoSettings } from "../types";
 
 /** The key stays amber for the echo's length, within these bounds. */
 const MIN_FLASH_MS = 350;
@@ -22,10 +22,17 @@ const LONG_PRESS_MS = 500;
 @action({ UUID: "com.slashpaf.audioforge.echo" })
 export class EchoAction extends SingletonAction<EchoSettings> {
   private _lastLibraryUuid: string | null = null;
-  private stateListener = (state: { libraryUuid?: string }) => {
+  private _lastAmbianceSignature = "";
+  private stateListener = (state: AudioForgeState) => {
     if (state.libraryUuid && state.libraryUuid !== this._lastLibraryUuid) {
       this._lastLibraryUuid = state.libraryUuid;
       this.pushCategoriesToOpenPI();
+    }
+    // Keys show whether their category runs as a background ambiance, so redraw when that changes.
+    const signature = `${state.ambiancePlaying}|${(state.ambianceCategories ?? []).map((c) => c.uuid).sort().join(",")}`;
+    if (signature !== this._lastAmbianceSignature) {
+      this._lastAmbianceSignature = signature;
+      void this.updateAllButtons();
     }
   };
   private catalogListener = () => {
@@ -167,12 +174,16 @@ export class EchoAction extends SingletonAction<EchoSettings> {
   }
 
   /** Show the idle icon, or the amber one while the category runs as an ambiance. */
-  private async settleImage(act: any, settings: EchoSettings) {
+  private async settleImage(
+    act: any,
+    settings: EchoSettings,
+    active: boolean = this.isAmbianceActive(settings.categoryUuid),
+  ) {
     if (!act.isKey()) return;
     const icon = this.iconCache.get(settings.categoryUuid) ?? settings.iconData;
     if (!icon) return;
-    const image = this.isAmbianceActive(settings.categoryUuid)
-      ? makeActiveImage(icon, this.categoryColor(settings.categoryUuid))
+    const image = active
+      ? makeActiveImage(icon, this.categoryColor(settings.categoryUuid), ENABLED_BG)
       : icon;
     await act.setImage(image).catch(() => {});
   }
@@ -184,8 +195,11 @@ export class EchoAction extends SingletonAction<EchoSettings> {
     clearTimeout(this.flashTimers.get(act.id));
     this.flashTimers.delete(act.id);
     this.litUntil.delete(act.id);
+    // What the key should show once the command succeeds; the state broadcast that follows lags by ~250 ms.
+    const enabling = !(echoPlaying || ambianceActive);
+    let ok = true;
     try {
-      if (echoPlaying || ambianceActive) {
+      if (!enabling) {
         await audioForge.request({ command: "stopEcho", categoryUuid: uuid });
         if (ambianceActive) {
           await audioForge.request({ command: "setCategoryEnabled", section: "Ambiance", categoryUuid: uuid, enabled: false });
@@ -194,9 +208,10 @@ export class EchoAction extends SingletonAction<EchoSettings> {
         await audioForge.request({ command: "setCategoryEnabled", section: "Ambiance", categoryUuid: uuid, enabled: true });
       }
     } catch (e) {
+      ok = false;
       streamDeck.logger.warn(`Echo long press failed: ${e instanceof Error ? e.message : e}`);
     }
-    await this.settleImage(act, settings);
+    await this.settleImage(act, settings, ok ? enabling : ambianceActive);
   }
 
   /**

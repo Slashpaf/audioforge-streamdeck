@@ -4,6 +4,9 @@ import { iconContrastOverride } from "./color-utils";
 /** Amber background shown on all persistently-playing category buttons. */
 export const ACTIVE_BG = "#ffb300";
 
+/** Darker amber that Audio Forge uses for an echo category that is enabled as a background ambiance. */
+export const ENABLED_BG = "#71520b";
+
 /**
  * Compose an icon onto the amber active background.
  *
@@ -14,18 +17,19 @@ export const ACTIVE_BG = "#ffb300";
 export function makeActiveImage(
   iconDataUrl: string,
   categoryColor: string | null,
+  background: string = ACTIVE_BG,
 ): string {
   if (iconDataUrl.startsWith("data:image/svg+xml")) {
     const override = categoryColor
-      ? iconContrastOverride(categoryColor, ACTIVE_BG)
+      ? iconContrastOverride(categoryColor, background)
       : null;
-    return activateSvgIcon(iconDataUrl, ACTIVE_BG, override);
+    return activateSvgIcon(iconDataUrl, background, override);
   }
 
   // PNG / JPEG — outer SVG wrapper
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="144" height="144">` +
-    `<rect width="144" height="144" fill="${ACTIVE_BG}"/>` +
+    `<rect width="144" height="144" fill="${background}"/>` +
     `<image href="${iconDataUrl}" width="144" height="144"/>` +
     `</svg>`;
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;

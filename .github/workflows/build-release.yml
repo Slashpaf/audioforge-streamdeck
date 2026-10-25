@@ -105,5 +105,5 @@ jobs:
           gh release create "$GITHUB_REF_NAME" release-assets/* \
             --verify-tag \
             --draft \
-            --title "Audio Forge ${version}" \
+            --title "$GITHUB_REF_NAME" \
             --notes-file notes.md

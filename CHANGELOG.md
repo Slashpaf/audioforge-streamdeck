@@ -2,6 +2,10 @@
 
 All notable changes to this plugin. Versions follow `package.json`; each release has a matching `vX.Y.Z` tag.
 
+## Unreleased
+
+- **Echo keys:** when an echo ends, its bar now wipes out from the left over 200 ms, like Audio Forge's own tile, instead of vanishing at once. An echo that is stopped early still clears immediately.
+
 ## 1.0.5
 
 - **OpenDeck:** each release now also attaches `Audio-Forge-vX.Y.Z-opendeck.zip`, the plugin folder in a ZIP that OpenDeck accepts through Install from file.

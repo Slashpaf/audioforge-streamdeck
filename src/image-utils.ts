@@ -105,10 +105,8 @@ function activateSvgIcon(
 
 /** A translucent bar that grows from the left of the key as an echo plays. */
 export interface KeyFill {
-  /** 0 to 1: where the bar's right edge is */
+  /** 0 to 1 */
   progress: number;
-  /** 0 to 1: where its left edge is. The bar is wiped out from the left once the echo has played (0 while it fills). */
-  from?: number;
   /** Category color, as #rrggbb. */
   color: string;
 }
@@ -131,19 +129,19 @@ export function makeFilledImage(iconDataUrl: string, background: string, fills: 
   const bars = (x: number, y: number, w: number, h: number) => {
     const base = parse(background, [0, 0, 0]);
     const layers = fills
-      .map((f) => ({ lo: clamp(f.from ?? 0), hi: clamp(f.progress), rgb: parse(f.color, [255, 179, 0]) }))
-      .filter((l) => l.hi > l.lo);
-    // Between two neighbouring edges, the layers covering that stretch are the ones that span all of it.
-    const cuts = [...new Set(layers.flatMap((l) => [l.lo, l.hi]))].sort((a, b) => a - b);
+      .map((f) => ({ p: clamp(f.progress), rgb: parse(f.color, [255, 179, 0]) }))
+      .filter((l) => l.p > 0);
+    // Between two progress values, the layers covering that stretch are the ones that reach at least its end.
+    const cuts = [...new Set(layers.map((l) => l.p))].sort((a, b) => a - b);
+    let from = 0;
     let rects = "";
-    for (let i = 1; i < cuts.length; i++) {
-      const from = cuts[i - 1];
-      const cut = cuts[i];
-      const covering = layers.filter((l) => l.lo <= from && l.hi >= cut);
-      if (covering.length === 0) continue;
+    for (const cut of cuts) {
       let rgb: Rgb = base;
-      for (const layer of covering) rgb = rgb.map((v, k) => (v + layer.rgb[k]) / 2) as Rgb;
+      for (const layer of layers) {
+        if (layer.p >= cut) rgb = rgb.map((v, i) => (v + layer.rgb[i]) / 2) as Rgb;
+      }
       rects += `<rect x="${(x + from * w).toFixed(2)}" y="${y}" width="${((cut - from) * w).toFixed(2)}" height="${h}" fill="${hex(rgb)}"/>`;
+      from = cut;
     }
     return rects;
   };

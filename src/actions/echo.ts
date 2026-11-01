@@ -17,24 +17,8 @@ import type { ActiveEcho, AudioForgeState, EchoSettings } from "../types";
 const MIN_FILL_MS = 400;
 /** How often the fill is redrawn on the key. */
 const TICK_MS = 150;
-/** Audio Forge clears a finished echo's bar from the left over this long; faster redraws keep that smooth. */
-const WIPE_MS = 200;
-const WIPE_TICK_MS = 50;
-/** An echo that Audio Forge reports as gone after this much of its length ended on its own, so its bar wipes out. */
-const ENDED_AFTER = 0.85;
 /** After a long press stops the echoes, pushes that were already in flight are ignored for this long. */
 const STOP_QUIET_MS = 800;
-/** One echo running from a key: its bar fills from `start` over `duration`, then wipes out from `wipeStart`. */
-interface EchoFill {
-  start: number;
-  duration: number;
-  color: string;
-  /** Set when the echo ended before its length was up; otherwise the wipe begins when the bar is full. */
-  wipeAt?: number;
-}
-
-const wipeStart = (f: EchoFill) => f.wipeAt ?? f.start + f.duration;
-
 /** Idle key background behind the translucent fill. */
 const IDLE_BG = "#000000";
 /** Holding the key this long stops the category, or enables it in the background when idle. */
@@ -195,15 +179,15 @@ export class EchoAction extends SingletonAction<EchoSettings> {
 
   private pressTimers = new Map<string, ReturnType<typeof setTimeout>>();
   /** Echoes playing from each key. Each one draws a bar that grows over the echo's length. */
-  private fills = new Map<string, Map<string, EchoFill>>();
-  private tickers = new Map<string, ReturnType<typeof setTimeout>>();
+  private fills = new Map<string, Map<string, { start: number; duration: number; color: string }>>();
+  private tickers = new Map<string, ReturnType<typeof setInterval>>();
 
   private activeFills(id: string) {
     const now = Date.now();
     const byEcho = this.fills.get(id);
     if (!byEcho) return [];
     for (const [playbackId, f] of byEcho) {
-      if (now >= wipeStart(f) + WIPE_MS) byEcho.delete(playbackId);
+      if (now - f.start >= f.duration) byEcho.delete(playbackId);
     }
     if (byEcho.size === 0) this.fills.delete(id);
     return [...byEcho.values()];
@@ -216,7 +200,7 @@ export class EchoAction extends SingletonAction<EchoSettings> {
 
   private clearFills(id: string) {
     this.fills.delete(id);
-    clearTimeout(this.tickers.get(id));
+    clearInterval(this.tickers.get(id));
     this.tickers.delete(id);
   }
 
@@ -239,11 +223,7 @@ export class EchoAction extends SingletonAction<EchoSettings> {
     const icon = this.iconCache.get(settings.categoryUuid) ?? settings.iconData;
     if (!icon) return;
     const now = Date.now();
-    const fills = this.activeFills(act.id).map((f) => ({
-      progress: now >= wipeStart(f) ? 1 : (now - f.start) / f.duration,
-      from: Math.min(1, Math.max(0, (now - wipeStart(f)) / WIPE_MS)),
-      color: f.color,
-    }));
+    const fills = this.activeFills(act.id).map((f) => ({ progress: (now - f.start) / f.duration, color: f.color }));
     const color = this.categoryColor(settings.categoryUuid);
     let image = icon;
     if (fills.length > 0) image = makeFilledImage(icon, active ? ENABLED_BG : IDLE_BG, fills);
@@ -253,21 +233,12 @@ export class EchoAction extends SingletonAction<EchoSettings> {
 
   private startTicker(act: any, settings: EchoSettings) {
     if (this.tickers.has(act.id)) return;
-    const tick = () => {
+    const ticker = setInterval(() => {
       void this.settleImage(act, settings);
-      if (!this.isLit(act.id)) {
-        this.clearFills(act.id);
-        return;
-      }
-      // Redraw faster while a bar is being wiped out, so the 200 ms sweep is more than a frame or two.
-      const wiping = [...(this.fills.get(act.id)?.values() ?? [])].some((f) => Date.now() >= wipeStart(f));
-      const timer = setTimeout(tick, wiping ? WIPE_TICK_MS : TICK_MS);
-      timer.unref();
-      this.tickers.set(act.id, timer);
-    };
-    const first = setTimeout(tick, TICK_MS);
-    first.unref();
-    this.tickers.set(act.id, first);
+      if (!this.isLit(act.id)) this.clearFills(act.id);
+    }, TICK_MS);
+    ticker.unref();
+    this.tickers.set(act.id, ticker);
   }
 
   private async onLongPress(act: any, settings: EchoSettings) {
@@ -323,18 +294,13 @@ export class EchoAction extends SingletonAction<EchoSettings> {
         });
         changed = true;
       }
-      // Anything missing from the list has stopped, wherever it was stopped. One that was nearly through
-      // its length ended on its own, so its bar wipes out like in Audio Forge; an earlier stop clears it at once.
+      // Anything missing from the list has stopped, wherever it was stopped.
       const ids = new Set(wanted.map((e) => e.playbackId));
       for (const playbackId of [...byEcho.keys()]) {
-        if (ids.has(playbackId)) continue;
-        const f = byEcho.get(playbackId)!;
-        if (f.wipeAt === undefined && received - f.start >= f.duration * ENDED_AFTER) {
-          f.wipeAt = Math.min(received, f.start + f.duration);
-        } else if (f.wipeAt === undefined) {
+        if (!ids.has(playbackId)) {
           byEcho.delete(playbackId);
+          changed = true;
         }
-        changed = true;
       }
       if (byEcho.size > 0) this.fills.set(id, byEcho);
       else this.fills.delete(id);

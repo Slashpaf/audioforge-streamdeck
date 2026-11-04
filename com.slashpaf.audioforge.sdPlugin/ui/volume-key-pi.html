@@ -30,16 +30,40 @@
   </sdpi-item>
   <p class="help-text" style="margin-top:2px;">Optional (Music and Ambiance). Controls one category's volume instead of the whole section.</p>
 
-  <sdpi-item label="Key Preset">
-    <div class="range-row">
-      <sdpi-range id="preset-range" setting="value" min="0" max="100" default="100" showlabels></sdpi-range>
-      <span class="range-val" id="preset-val">100%</span>
-    </div>
+  <sdpi-item label="Key Action">
+    <sdpi-select setting="keyMode" id="key-mode" default="preset">
+      <option value="preset">Set to preset</option>
+      <option value="up">Increase volume</option>
+      <option value="down">Decrease volume</option>
+      <option value="mute">Mute / Unmute</option>
+    </sdpi-select>
   </sdpi-item>
-  <p class="help-text" style="margin-top:2px;">Volume set on key press (0% – 100%)</p>
+
+  <div id="preset-group">
+    <sdpi-item label="Key Preset">
+      <div class="range-row">
+        <sdpi-range id="preset-range" setting="value" min="0" max="100" default="100" showlabels></sdpi-range>
+        <span class="range-val" id="preset-val">100%</span>
+      </div>
+    </sdpi-item>
+    <p class="help-text" style="margin-top:2px;">Volume set on key press (0% – 100%)</p>
+  </div>
+
+  <div id="step-group" style="display:none;">
+    <sdpi-item label="Step">
+      <sdpi-select setting="step" default="5">
+        <option value="1">1%</option>
+        <option value="2">2%</option>
+        <option value="5">5%</option>
+        <option value="10">10%</option>
+        <option value="25">25%</option>
+      </sdpi-select>
+    </sdpi-item>
+    <p class="help-text" style="margin-top:2px;">Each press changes the volume by this amount.</p>
+  </div>
 
   <hr class="section-divider" />
-  <p class="help-text"><b>Key press:</b> jumps volume to the preset value.</p>
+  <p class="help-text" id="mode-help"></p>
 
   <hr class="section-divider" />
   <details>
@@ -61,6 +85,23 @@
       setTimeout(() => clearInterval(poll), 4000);
     }
     watchRange('preset-range', 'preset-val', (v) => `${v}%`);
+    const HELP = {
+      preset: '<b>Key press:</b> jumps volume to the preset value.',
+      up: '<b>Key press:</b> raises the volume by the step. Pair with a Decrease key.',
+      down: '<b>Key press:</b> lowers the volume by the step. Pair with an Increase key.',
+      mute: '<b>Key press:</b> mutes, then restores the previous volume on the next press.'
+    };
+    function refreshMode(mode) {
+      mode = mode || 'preset';
+      document.getElementById('preset-group').style.display = mode === 'preset' ? '' : 'none';
+      document.getElementById('step-group').style.display = (mode === 'up' || mode === 'down') ? '' : 'none';
+      document.getElementById('mode-help').innerHTML = HELP[mode] || HELP.preset;
+    }
+    refreshMode('preset');
+    const modeSel = document.getElementById('key-mode');
+    modeSel.addEventListener('change', (e) => { const v = typeof e.detail === 'object' ? e.detail?.value : e.detail; setTimeout(() => refreshMode(v || modeSel.value), 0); });
+    const modePoll = setInterval(() => { if (modeSel.value) { refreshMode(modeSel.value); clearInterval(modePoll); } }, 150);
+    setTimeout(() => clearInterval(modePoll), 4000);
     setTimeout(() => { updateConnectionStatus(); startConnectionPolling(); }, 500);
   </script>
 </body>

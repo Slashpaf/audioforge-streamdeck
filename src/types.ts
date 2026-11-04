@@ -122,7 +122,8 @@ export interface VolumeSettings {
   categoryUuid?: string; // optional: control one category instead of the whole section
   categoryName?: string;
   value: number; // 0-100 for keypad preset
-  step: number;  // increment for dial
+  step: number | string;  // increment (%) for dial and for keypad up/down
+  keyMode?: "preset" | "up" | "down" | "mute"; // keypad behavior, default preset
   [key: string]: JsonValue;
 }
 

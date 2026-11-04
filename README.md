@@ -13,7 +13,7 @@ Control Audio Forge playback from Elgato Stream Deck or OpenDeck. The plugin tal
 | Next Track | Skip to the next track in the active Music or Ambiance categories |
 | Category | Toggle a Music or Ambiance category |
 | Echo | Trigger a one-shot Ambiance sound |
-| Volume | Set a keypad preset or adjust volume with a Stream Deck+ dial |
+| Volume | Keypad: set a preset, step the volume up or down, or mute/unmute. Stream Deck+ dial: adjust volume |
 | Library | Switch the active library |
 | Restore Saved State | Restore a saved Audio Forge state |
 

@@ -2,6 +2,11 @@
 
 All notable changes to this plugin. Versions follow `package.json`; each release has a matching `vX.Y.Z` tag.
 
+## 1.0.6
+
+- **Volume keys** have a new Key Action setting: set to a preset (as before), increase, decrease, or mute/unmute. Increase and decrease change the volume by a configurable step of 1, 2, 5, 10 or 25% per press, and the key shows the direction and current volume. Existing keys keep working as presets.
+- **Volume dials** use the same step dropdown (1, 2, 5, 10, 25%) instead of the 1–20% slider. A dial saved with another step moves to the nearest option.
+
 ## 1.0.5
 
 - **OpenDeck:** each release now also attaches `Audio-Forge-vX.Y.Z-opendeck.zip`, the plugin folder in a ZIP that OpenDeck accepts through Install from file.

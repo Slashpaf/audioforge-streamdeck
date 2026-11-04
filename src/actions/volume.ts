@@ -16,6 +16,9 @@ import type { AudioForgeState, CategoryInfo, VolumeSettings } from "../types";
 // Datasource value for "no specific category" (controls the whole section).
 const WHOLE_SECTION = "__section__";
 
+// Step sizes (%) offered in the Property Inspector.
+const STEP_OPTIONS = [1, 2, 5, 10, 25];
+
 interface VolumeTarget {
   section: string;
   categoryUuid?: string;
@@ -60,9 +63,15 @@ class VolumeBase extends SingletonAction<VolumeSettings> {
 
   override async onWillAppear(ev: WillAppearEvent<VolumeSettings>): Promise<void> {
     this.attach();
-    const settings = ev.payload.settings;
+    let settings = ev.payload.settings;
     if (!settings.section) {
       await ev.action.setSettings({ section: "Music", value: 100, step: 5 });
+    } else if (settings.step !== undefined && !STEP_OPTIONS.includes(Number(settings.step))) {
+      // Older dials could store any 1-20; snap to the nearest option the dropdown offers.
+      const old = Number(settings.step) || 5;
+      const step = STEP_OPTIONS.reduce((a, b) => (Math.abs(b - old) < Math.abs(a - old) ? b : a));
+      settings = { ...settings, step };
+      await ev.action.setSettings(settings);
     }
     await this.updateButton(ev.action, settings, audioForge.state);
   }
@@ -172,54 +181,73 @@ class VolumeBase extends SingletonAction<VolumeSettings> {
     await streamDeck.ui.sendToPropertyInspector({ event: "getCategories", items });
   }
 
-  // Keypad: jump to preset value (0-100 display).
+  // Current volume as the user last saw it: local value while recently touched, else remote.
+  private currentVolume(t: VolumeTarget): number {
+    const idle = Date.now() - (this.lastDialMs[t.key] ?? 0) > this.DIAL_IDLE_MS;
+    return (!idle && this.localVol[t.key] !== undefined)
+      ? this.localVol[t.key]
+      : this.remoteToDisplay(t, audioForge.state);
+  }
+
+  // Applies a volume change and remembers it locally so rapid presses accumulate.
+  private applyVolume(t: VolumeTarget, vol: number) {
+    this.localVol[t.key] = vol;
+    this.lastDialMs[t.key] = Date.now();
+    audioForge.send(this.volumeCommand(t, Math.round(vol * 100) / 100));
+  }
+
+  // Mute if audible, otherwise restore the volume from before the mute.
+  private toggleMute(t: VolumeTarget) {
+    const current = this.currentVolume(t);
+    if (current > 0) {
+      this.preMuteVolume[t.key] = current;
+      this.applyVolume(t, 0);
+    } else {
+      this.applyVolume(t, this.preMuteVolume[t.key] ?? 0.5);
+    }
+  }
+
+  private stepOf(settings: VolumeSettings): number {
+    return (Number(settings.step) || 5) / 100;
+  }
+
+  // Keypad: depends on the key mode (preset by default).
   override async onKeyDown(ev: KeyDownEvent<VolumeSettings>): Promise<void> {
     audioForge.launchIfOffline();
-    const t = this.target(ev.payload.settings);
-    const displayVal = (ev.payload.settings.value ?? 100) / 100;
-    this.localVol[t.key] = displayVal;
-    audioForge.send(this.volumeCommand(t, displayVal));
+    const settings = ev.payload.settings;
+    const t = this.target(settings);
+    switch (settings.keyMode) {
+      case "up":
+      case "down": {
+        const delta = (settings.keyMode === "up" ? 1 : -1) * this.stepOf(settings);
+        const newVal = Math.max(0, Math.min(1, this.currentVolume(t) + delta));
+        this.applyVolume(t, newVal);
+        await this.updateButton(ev.action, settings, audioForge.state);
+        break;
+      }
+      case "mute":
+        this.toggleMute(t);
+        await this.updateButton(ev.action, settings, audioForge.state);
+        break;
+      default:
+        this.applyVolume(t, (Number(settings.value ?? 100)) / 100);
+    }
   }
 
   // Dial rotate: adjust volume
   override async onDialRotate(ev: DialRotateEvent<VolumeSettings>): Promise<void> {
     audioForge.launchIfOffline();
     const t = this.target(ev.payload.settings);
-    const step = (ev.payload.settings.step || 5) / 100;
-    const now = Date.now();
-
-    const idle = now - (this.lastDialMs[t.key] ?? 0) > this.DIAL_IDLE_MS;
-    if (idle || this.localVol[t.key] === undefined) {
-      this.localVol[t.key] = this.remoteToDisplay(t, audioForge.state);
-    }
-
-    const newVal = Math.max(0, Math.min(1, this.localVol[t.key] + step * ev.payload.ticks));
-    this.localVol[t.key] = newVal;
-    this.lastDialMs[t.key] = now;
-
+    const step = this.stepOf(ev.payload.settings);
+    const newVal = Math.max(0, Math.min(1, this.currentVolume(t) + step * ev.payload.ticks));
+    this.applyVolume(t, newVal);
     await this.setDialFeedback(ev.action, newVal);
-    audioForge.send(this.volumeCommand(t, Math.round(newVal * 100) / 100));
   }
 
   // Dial press: mute / unmute
   override async onDialDown(ev: DialDownEvent<VolumeSettings>): Promise<void> {
     audioForge.launchIfOffline();
-    const t = this.target(ev.payload.settings);
-    const idle = Date.now() - (this.lastDialMs[t.key] ?? 0) > this.DIAL_IDLE_MS;
-    const current = (!idle && this.localVol[t.key] !== undefined)
-      ? this.localVol[t.key]
-      : this.remoteToDisplay(t, audioForge.state);
-
-    if (current > 0) {
-      this.preMuteVolume[t.key] = current;
-      this.localVol[t.key] = 0;
-      audioForge.send(this.volumeCommand(t, 0));
-    } else {
-      const restore = this.preMuteVolume[t.key] ?? 0.5;
-      this.localVol[t.key] = restore;
-      audioForge.send(this.volumeCommand(t, restore));
-    }
-    this.lastDialMs[t.key] = Date.now();
+    this.toggleMute(this.target(ev.payload.settings));
   }
 
   private async updateAllButtons(state: AudioForgeState | null) {
@@ -249,7 +277,9 @@ class VolumeBase extends SingletonAction<VolumeSettings> {
     if (idle) this.localVol[t.key] = remoteDisplay;
 
     const pct = Math.round(vol * 100);
-    await act.setTitle(`${t.label}\n${pct}%`);
+    const mode = act.isDial?.() ? undefined : settings.keyMode;
+    const prefix = mode === "up" ? "▲ " : mode === "down" ? "▼ " : "";
+    await act.setTitle(mode === "mute" && pct === 0 ? `${t.label}\nMuted` : `${t.label}\n${prefix}${pct}%`);
     if (act.isDial?.()) {
       await act.setFeedback({ title: t.label, value: pct, indicator: { value: pct } });
     }

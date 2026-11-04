@@ -22,7 +22,7 @@
     "typescript": "^5.7.3"
   },
   "dependencies": {
-    "@elgato/streamdeck": "^3.0.3",
+    "@elgato/streamdeck": "^3.0.4",
     "ws": "^8.22.0"
   }
 }
